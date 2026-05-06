@@ -1,0 +1,1206 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="description" content="Tango3D: A Foundation Model for Unified 2D-3D Alignment" />
+    <meta name="keywords"
+        content="3D foundation model, 2D-3D alignment, point cloud, retrieval, dense correspondence" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tango3D: A Foundation Model for Unified 2D-3D Alignment</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: '#4FACFA',
+                        'brand-dark': '#2D8BD9',
+                        'brand-deeper': '#1a5690',
+                        'brand-light': '#E8F4FD',
+                        'brand-pale': '#F0F7FD',
+                        'navy': '#0F172A',
+                        'section-alt': '#F8FAFC',
+                    },
+                    fontFamily: {
+                        display: ['"Playfair Display"', 'Georgia', 'serif'],
+                        body: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                    animation: {
+                        'fade-up': 'fadeUp 0.7s ease-out forwards',
+                        'fade-in': 'fadeIn 0.5s ease-out forwards',
+                        'slide-down': 'slideDown 0.3s ease-out forwards',
+                        'float': 'float 6s ease-in-out infinite',
+                    },
+                    keyframes: {
+                        fadeUp: {
+                            '0%': { opacity: '0', transform: 'translateY(30px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' },
+                        },
+                        fadeIn: {
+                            '0%': { opacity: '0' },
+                            '100%': { opacity: '1' },
+                        },
+                        slideDown: {
+                            '0%': { opacity: '0', transform: 'translateY(-10px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' },
+                        },
+                        float: {
+                            '0%, 100%': { transform: 'translateY(0px)' },
+                            '50%': { transform: 'translateY(-20px)' },
+                        },
+                    },
+                }
+            }
+        }
+    </script>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@400;500;600;700;800&display=swap"
+        rel="stylesheet" />
+
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/jpswalsh/academicons@1/css/academicons.min.css" />
+
+    <!-- Model Viewer -->
+    <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.1.1/model-viewer.min.js"></script>
+    <script type="module">
+        if (!customElements.get('model-viewer')) {
+            import('https://unpkg.com/@google/model-viewer@3.1.1/dist/model-viewer.min.js');
+        }
+    </script>
+
+    <style>
+        /* Base overrides */
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+        }
+
+        h1,
+        h2,
+        .section-title {
+            font-family: 'Playfair Display', Georgia, serif;
+        }
+
+        /* Scroll animation setup */
+        .reveal {
+            opacity: 0;
+            transform: translateY(30px);
+            transition: opacity 0.7s ease-out, transform 0.7s ease-out;
+        }
+
+        .reveal.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* Model-viewer sizes */
+        model-viewer {
+            --poster-color: transparent;
+        }
+
+        /* Image hover zoom */
+        .img-zoom {
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            cursor: pointer;
+        }
+
+        .img-zoom:hover {
+            transform: scale(1.8);
+            z-index: 100;
+            position: relative;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Table styling */
+        .exp-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+        }
+
+        .exp-table th {
+            padding: 10px 6px;
+            text-align: center;
+            font-size: 0.85rem;
+            font-weight: 700;
+            border-bottom: 2px solid #e2e8f0;
+            background: #f8fafc;
+            color: #475569;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .exp-table td {
+            padding: 8px 6px;
+            text-align: center;
+            vertical-align: middle;
+            border-bottom: 1px solid #f1f5f9;
+        }
+
+        .exp-table tr:hover td {
+            background: #f8fafc;
+        }
+
+        .exp-table model-viewer {
+            height: 150px;
+            width: 150px;
+            display: inline-block;
+        }
+
+        /* Collapsible rows */
+        .collapsible-row {
+            transition: max-height 0.5s ease, opacity 0.5s ease;
+            overflow: hidden;
+        }
+
+        .collapsible-row.collapsed td {
+            padding: 0;
+            border: 0;
+            line-height: 0;
+        }
+
+        .collapsible-row.collapsed {
+            max-height: 0;
+            opacity: 0;
+        }
+
+        .collapsible-row.collapsed * {
+            height: 0 !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            border: 0 !important;
+            overflow: hidden;
+        }
+
+        /* Sim badge */
+        .sim-badge {
+            display: inline-block;
+            font-size: 0.72rem;
+            color: #94a3b8;
+            margin-top: 3px;
+            font-family: 'Inter', monospace;
+        }
+
+        /* Nav active */
+        .nav-link.active {
+            color: #4FACFA !important;
+        }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        /* Gradient text */
+        .gradient-text {
+            background: linear-gradient(135deg, #4FACFA, #2D8BD9);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        /* Glass morphism nav */
+        .glass-nav {
+            backdrop-filter: blur(16px) saturate(180%);
+            -webkit-backdrop-filter: blur(16px) saturate(180%);
+            background: rgba(255, 255, 255, 0.82);
+        }
+
+        /* Decorative blobs */
+        .blob-1 {
+            position: absolute;
+            width: 400px;
+            height: 400px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(79, 172, 250, 0.08) 0%, transparent 70%);
+            top: -100px;
+            right: -100px;
+            pointer-events: none;
+        }
+
+        .blob-2 {
+            position: absolute;
+            width: 300px;
+            height: 300px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(79, 172, 250, 0.06) 0%, transparent 70%);
+            bottom: -50px;
+            left: -80px;
+            pointer-events: none;
+        }
+
+        /* Local grid */
+        .local-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+        }
+
+        @media (max-width: 768px) {
+            .local-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .local-card {
+            text-align: center;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 12px;
+            background: #fff;
+            transition: box-shadow 0.3s, transform 0.3s;
+        }
+
+        .local-card:hover {
+            box-shadow: 0 4px 20px rgba(79, 172, 250, 0.12);
+            transform: translateY(-2px);
+        }
+
+        /* Region card */
+        .region-card {
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            overflow: hidden;
+            background: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 12px;
+            gap: 10px;
+            width: fit-content;
+            max-width: 100%;
+            transition: box-shadow 0.3s;
+        }
+
+        .region-card:hover {
+            box-shadow: 0 4px 20px rgba(79, 172, 250, 0.12);
+        }
+
+        .region-card img {
+            height: 180px;
+            width: auto;
+            max-width: 200px;
+            object-fit: contain;
+            display: block;
+            border-radius: 8px;
+        }
+
+        .region-card model-viewer {
+            height: 180px;
+            width: 180px;
+            flex-shrink: 0;
+        }
+
+        /* Multi model row */
+        .multi-model-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            justify-content: center;
+        }
+
+        .multi-model-row model-viewer {
+            width: 130px;
+            height: 130px;
+        }
+
+        /* View images */
+        .view-images {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            justify-content: center;
+        }
+
+        .view-images img {
+            height: 100px;
+            width: auto;
+            object-fit: contain;
+            border-radius: 6px;
+            border: 1px solid #e2e8f0;
+        }
+
+        /* Section divider */
+        .section-divider {
+            height: 1px;
+            background: linear-gradient(to right, transparent, #e2e8f0, transparent);
+            margin: 0 auto;
+            max-width: 200px;
+        }
+
+        /* Experiment card wrapper */
+        .experiment-card {
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 14px;
+            margin-bottom: 14px;
+            background: #fff;
+            transition: box-shadow 0.3s;
+        }
+
+        .experiment-card:hover {
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+        }
+
+        .experiment-card-alt {
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 14px;
+            margin-bottom: 14px;
+            background: #f8fafc;
+            transition: box-shadow 0.3s;
+        }
+
+        .experiment-card-alt:hover {
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+        }
+
+        /* Back to top button */
+        #backToTop {
+            transition: opacity 0.3s, transform 0.3s;
+        }
+
+        /* Mobile nav */
+        .mobile-menu {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+        }
+
+        .mobile-menu.open {
+            max-height: 400px;
+        }
+
+        /* Page loader */
+        #pageLoader {
+            transition: opacity 0.4s ease-out;
+        }
+
+        #pageLoader.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        /* Responsive table */
+        .table-wrapper {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        /* Model viewer loading placeholder */
+        model-viewer::part(default-progress-bar) {
+            background: #4FACFA;
+        }
+
+        /* Query image in tables */
+        .query-img-table {
+            max-height: 140px;
+            max-width: 140px;
+            object-fit: contain;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+        }
+    </style>
+</head>
+
+<body class="bg-white text-slate-800 antialiased">
+
+    <!-- Page Loader -->
+    <div id="pageLoader" class="fixed inset-0 z-[9999] bg-white flex items-center justify-center">
+        <div class="flex flex-col items-center gap-4">
+            <div class="w-10 h-10 border-3 border-brand/30 border-t-brand rounded-full animate-spin"
+                style="border-width:3px;"></div>
+            <span class="text-slate-400 text-sm font-body">Loading…</span>
+        </div>
+    </div>
+
+    <!-- ============ NAVIGATION ============ -->
+    <nav id="mainNav" class="glass-nav fixed top-0 left-0 right-0 z-50 border-b border-slate-200/60 hidden">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6">
+            <div class="flex items-center justify-between h-14">
+                <a href="#hero" class="font-display font-bold text-lg text-navy tracking-tight">Tango3D</a>
+                <!-- Desktop Nav -->
+                <div class="hidden md:flex items-center gap-1">
+                    <a href="#abstract"
+                        class="nav-link px-3 py-1.5 text-sm font-medium text-slate-600 hover:text-brand rounded-lg transition-colors">Abstract</a>
+                    <a href="#method"
+                        class="nav-link px-3 py-1.5 text-sm font-medium text-slate-600 hover:text-brand rounded-lg transition-colors">Method</a>
+                    <a href="#local-2d3d"
+                        class="nav-link px-3 py-1.5 text-sm font-medium text-slate-600 hover:text-brand rounded-lg transition-colors">2D→3D</a>
+                    <a href="#local-1vN"
+                        class="nav-link px-3 py-1.5 text-sm font-medium text-slate-600 hover:text-brand rounded-lg transition-colors">Cross-Inst</a>
+                    <a href="#local-3d2d"
+                        class="nav-link px-3 py-1.5 text-sm font-medium text-slate-600 hover:text-brand rounded-lg transition-colors">3D→2D</a>
+                    <a href="#local-3d3d"
+                        class="nav-link px-3 py-1.5 text-sm font-medium text-slate-600 hover:text-brand rounded-lg transition-colors">3D→3D</a>
+                    <a href="#region"
+                        class="nav-link px-3 py-1.5 text-sm font-medium text-slate-600 hover:text-brand rounded-lg transition-colors">Transfer</a>
+                    <a href="#global-2d3d"
+                        class="nav-link px-3 py-1.5 text-sm font-medium text-slate-600 hover:text-brand rounded-lg transition-colors">Global
+                        2D→3D</a>
+                    <a href="#global-3d3d"
+                        class="nav-link px-3 py-1.5 text-sm font-medium text-slate-600 hover:text-brand rounded-lg transition-colors">Global
+                        3D→3D</a>
+                </div>
+                <!-- Mobile hamburger -->
+                <button id="mobileMenuBtn" class="md:hidden p-2 text-slate-600 hover:text-brand transition-colors">
+                    <i data-lucide="menu" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <!-- Mobile menu -->
+            <div id="mobileMenu" class="mobile-menu md:hidden">
+                <div class="py-3 flex flex-col gap-1 border-t border-slate-200/60">
+                    <a href="#abstract"
+                        class="mobile-nav-link px-3 py-2 text-sm font-medium text-slate-600 hover:text-brand hover:bg-brand-light/50 rounded-lg transition-colors">Abstract</a>
+                    <a href="#method"
+                        class="mobile-nav-link px-3 py-2 text-sm font-medium text-slate-600 hover:text-brand hover:bg-brand-light/50 rounded-lg transition-colors">Method</a>
+                    <a href="#local-2d3d"
+                        class="mobile-nav-link px-3 py-2 text-sm font-medium text-slate-600 hover:text-brand hover:bg-brand-light/50 rounded-lg transition-colors">2D→3D</a>
+                    <a href="#local-1vN"
+                        class="mobile-nav-link px-3 py-2 text-sm font-medium text-slate-600 hover:text-brand hover:bg-brand-light/50 rounded-lg transition-colors">Cross-Instance</a>
+                    <a href="#local-3d2d"
+                        class="mobile-nav-link px-3 py-2 text-sm font-medium text-slate-600 hover:text-brand hover:bg-brand-light/50 rounded-lg transition-colors">3D→2D</a>
+                    <a href="#local-3d3d"
+                        class="mobile-nav-link px-3 py-2 text-sm font-medium text-slate-600 hover:text-brand hover:bg-brand-light/50 rounded-lg transition-colors">3D→3D</a>
+                    <a href="#region"
+                        class="mobile-nav-link px-3 py-2 text-sm font-medium text-slate-600 hover:text-brand hover:bg-brand-light/50 rounded-lg transition-colors">Transfer</a>
+                    <a href="#global-2d3d"
+                        class="mobile-nav-link px-3 py-2 text-sm font-medium text-slate-600 hover:text-brand hover:bg-brand-light/50 rounded-lg transition-colors">Global
+                        2D→3D</a>
+                    <a href="#global-3d3d"
+                        class="mobile-nav-link px-3 py-2 text-sm font-medium text-slate-600 hover:text-brand hover:bg-brand-light/50 rounded-lg transition-colors">Global
+                        3D→3D</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- ============ HERO ============ -->
+    <section id="hero" class="relative overflow-hidden pt-12 pb-6 md:pt-20 md:pb-10">
+        <div class="blob-1"></div>
+        <div class="blob-2"></div>
+        <div class="max-w-4xl mx-auto px-4 sm:px-6 text-center relative z-10">
+            <h1
+                class="font-display font-bold text-3xl sm:text-4xl md:text-5xl lg:text-6xl text-navy leading-tight mb-4">
+                Tango3D: <span class="gradient-text">A Foundation Model for Unified 2D-3D Alignment</span>
+            </h1>
+            <p class="text-base sm:text-lg md:text-xl text-slate-500 mb-5 font-light tracking-wide">
+                Unifying Dense Correspondence and Global Retrieval
+            </p>
+            <p class="text-slate-400 text-base mb-6">Anonymous Authors</p>
+            <!-- <div class="flex items-center justify-center gap-3 flex-wrap mb-2">
+                <a href="#"
+                    class="inline-flex items-center gap-2 px-5 py-2.5 bg-navy text-white rounded-full text-sm font-medium hover:bg-slate-800 transition-colors shadow-lg shadow-navy/20">
+                    <i class="ai ai-arxiv text-base"></i> arXiv
+                </a>
+                <a href="#"
+                    class="inline-flex items-center gap-2 px-5 py-2.5 bg-navy text-white rounded-full text-sm font-medium hover:bg-slate-800 transition-colors shadow-lg shadow-navy/20">
+                    <i class="fab fa-github text-base"></i> Code
+                </a>
+            </div>
+            <p class="text-xs text-slate-400 mt-1">(coming soon)</p> -->
+        </div>
+    </section>
+
+    <!-- ============ TEASER ============ -->
+    <section class="py-6 md:py-10">
+        <div class="max-w-5xl mx-auto px-4 sm:px-6">
+            <img src="./img/teaser.png" class="w-full rounded-2xl shadow-sm" alt="Tango3D Teaser" />
+        </div>
+    </section>
+
+    <!-- ============ ABSTRACT ============ -->
+    <section id="abstract" class="py-12 md:py-16 bg-section-alt relative overflow-hidden">
+        <div class="blob-1" style="top:-200px;right:-200px;opacity:0.5;"></div>
+        <div class="max-w-4xl mx-auto px-4 sm:px-6 reveal">
+            <div class="text-center mb-8">
+                <h2 class="font-display font-bold text-2xl sm:text-3xl md:text-4xl text-navy mb-3">Abstract</h2>
+                <div class="section-divider"></div>
+            </div>
+            <p class="text-base sm:text-lg leading-relaxed text-slate-700 text-justify hyphens-auto">
+                Existing 3D foundation models typically align point clouds to frozen vision-language spaces like CLIP,
+                which achieve strong cross-modal retrieval by compressing 3D shape into a global vector. However, this
+                global-only alignment cannot establish fine-grained pixel-to-point correspondence.
+                To solve this, we present <strong class="text-navy">Tango3D</strong>, a foundation model that unifies
+                dense correspondence and global retrieval. We use a geometry-aware 2D visual backbone and a pretrained
+                3D VAE to encode images into 2D patches and point clouds into 3D tokens. These are mapped into a single
+                shared space to achieve both local pixel-to-point alignment and global semantic alignment.
+                To stabilize the joint learning of dense and global objectives, we introduce a three-stage progressive
+                training strategy. Experiments show Tango3D is the first to achieve object-level pixel-to-point
+                alignment while maintaining competitive global retrieval. By establishing a fine-grained alignment
+                feature space, Tango3D injects rich semantics into purely geometric 3D tokens, paving the way for a
+                wide range of dense 3D downstream tasks.
+            </p>
+        </div>
+    </section>
+
+    <!-- ============ METHOD ============ -->
+    <section id="method" class="py-12 md:py-16">
+        <div class="max-w-5xl mx-auto px-4 sm:px-6 reveal">
+            <div class="text-center mb-8">
+                <h2 class="font-display font-bold text-2xl sm:text-3xl md:text-4xl text-navy mb-3">Method</h2>
+                <div class="section-divider"></div>
+            </div>
+            <div class="text-center">
+                <img src="./img/pipeline.png" alt="Method pipeline"
+                    class="w-full rounded-2xl shadow-lg shadow-slate-200/50 border border-slate-100" />
+            </div>
+        </div>
+    </section>
+
+    <!-- ============ LOCAL 2D→3D (Intra-Object) ============ -->
+    <section id="local-2d3d" class="py-12 md:py-16 bg-section-alt">
+        <div class="max-w-5xl mx-auto px-4 sm:px-6 reveal">
+            <div class="text-center mb-6">
+                <h2 class="font-display font-bold text-2xl sm:text-3xl md:text-4xl text-navy mb-3">
+                    Pixel-to-Point Correspondence: <span class="gradient-text">2D → 3D</span>
+                </h2>
+                <div class="section-divider mb-4"></div>
+                <p class="text-slate-500 max-w-2xl mx-auto text-sm sm:text-base">
+                    A single query pixel on the 2D image accurately localizes the corresponding geometric region on the
+                    3D mesh, confirming robust fine-grained spatial grounding.
+                </p>
+            </div>
+            <div class="local-grid" id="local-1v1-grid"></div>
+            <div class="flex items-center justify-center gap-4 mt-6">
+                <button id="local-1v1-prev"
+                    class="inline-flex items-center gap-1 px-4 py-2 bg-brand text-white rounded-full text-sm font-medium hover:bg-brand-dark transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                    <i data-lucide="chevron-left" class="w-4 h-4"></i> Prev
+                </button>
+                <span id="local-1v1-page-info" class="text-sm text-slate-500 font-medium"></span>
+                <button id="local-1v1-next"
+                    class="inline-flex items-center gap-1 px-4 py-2 bg-brand text-white rounded-full text-sm font-medium hover:bg-brand-dark transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                    Next <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- ============ LOCAL 2D→3D (Cross-Instance) ============ -->
+    <section id="local-1vN" class="py-12 md:py-16">
+        <div class="max-w-6xl mx-auto px-4 sm:px-6 reveal">
+            <div class="text-center mb-6">
+                <h2 class="font-display font-bold text-2xl sm:text-3xl md:text-4xl text-navy mb-3">
+                    Cross-Instance Matching: <span class="gradient-text">2D → 3D</span>
+                </h2>
+                <div class="section-divider mb-4"></div>
+                <p class="text-slate-500 max-w-2xl mx-auto text-sm sm:text-base">
+                    A pixel on one object successfully retrieves the semantically equivalent 3D region on entirely
+                    different instances, indicating that the shared space captures category-level semantics rather than
+                    merely overfitting to exact shapes.
+                </p>
+            </div>
+            <div id="local-1vN-container"></div>
+        </div>
+    </section>
+
+    <!-- ============ LOCAL 3D→2D (Reverse Grounding) ============ -->
+    <section id="local-3d2d" class="py-12 md:py-16 bg-section-alt">
+        <div class="max-w-5xl mx-auto px-4 sm:px-6 reveal">
+            <div class="text-center mb-6">
+                <h2 class="font-display font-bold text-2xl sm:text-3xl md:text-4xl text-navy mb-3">
+                    Reverse Grounding: <span class="gradient-text">3D → 2D</span>
+                </h2>
+                <div class="section-divider mb-4"></div>
+                <p class="text-slate-500 max-w-2xl mx-auto text-sm sm:text-base">
+                    A single 3D point correctly grounds back to corresponding pixels across diverse camera poses,
+                    verifying strict multi-view consistency of the shared descriptor space.
+                </p>
+            </div>
+            <div id="local-3d2d-container"></div>
+        </div>
+    </section>
+
+    <!-- ============ LOCAL 3D→3D ============ -->
+    <section id="local-3d3d" class="py-12 md:py-16">
+        <div class="max-w-6xl mx-auto px-4 sm:px-6 reveal">
+            <div class="text-center mb-6">
+                <h2 class="font-display font-bold text-2xl sm:text-3xl md:text-4xl text-navy mb-3">
+                    Cross-Instance Matching: <span class="gradient-text">3D → 3D</span>
+                </h2>
+                <div class="section-divider mb-4"></div>
+                <p class="text-slate-500 max-w-2xl mx-auto text-sm sm:text-base">
+                    Pure 3D-to-3D queries reveal that the 3D tokens acquire semantic part-level alignment, accurately
+                    matching corresponding structural parts across different shapes without any 2D input.
+                </p>
+            </div>
+            <div id="local-3d3d-container"></div>
+        </div>
+    </section>
+
+    <!-- ============ REGION: 2D-to-3D Part Transfer ============ -->
+    <section id="region" class="py-12 md:py-16 bg-section-alt">
+        <div class="max-w-5xl mx-auto px-4 sm:px-6 reveal">
+            <div class="text-center mb-6">
+                <h2 class="font-display font-bold text-2xl sm:text-3xl md:text-4xl text-navy mb-3">
+                    2D-to-3D <span class="gradient-text">Part Transfer</span>
+                </h2>
+                <div class="section-divider mb-4"></div>
+                <p class="text-slate-500 max-w-2xl mx-auto text-sm sm:text-base">
+                    By coupling SAM with our local descriptor space, an arbitrary 2D part mask is transferred onto the
+                    3D mesh without any part-level supervision. Click to enlarge.
+                </p>
+            </div>
+            <div class="flex flex-col gap-4 items-center" id="region-grid"></div>
+        </div>
+    </section>
+
+    <!-- ============ GLOBAL: Image→Shape Retrieval ============ -->
+    <section id="global-2d3d" class="py-12 md:py-16">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 reveal">
+            <div class="text-center mb-6">
+                <h2 class="font-display font-bold text-2xl sm:text-3xl md:text-4xl text-navy mb-3">
+                    Image-to-Shape Retrieval: <span class="gradient-text">2D → 3D</span>
+                </h2>
+                <div class="section-divider mb-4"></div>
+                <p class="text-slate-500 max-w-2xl mx-auto text-sm sm:text-base">
+                    Using the 2D global descriptor, Tango3D retrieves the most similar 3D shapes from a large gallery
+                    ranked by cosine similarity. Drag to rotate.
+                </p>
+            </div>
+            <div class="table-wrapper bg-white rounded-2xl shadow-sm border border-slate-200/80 p-2">
+                <table class="exp-table" id="global-2d3d-table">
+                    <thead>
+                        <tr>
+                            <th>Query Image</th>
+                            <th>Top-1</th>
+                            <th>Top-2</th>
+                            <th>Top-3</th>
+                            <th>Top-4</th>
+                            <th style="border-left: 2px solid #e2e8f0;">Last-2</th>
+                            <th>Last-1</th>
+                        </tr>
+                    </thead>
+                    <tbody id="global-2d3d-body"></tbody>
+                </table>
+            </div>
+            <div class="text-center mt-6">
+                <button id="toggle-global-2d3d"
+                    class="inline-flex items-center gap-2 px-6 py-2.5 bg-brand text-white rounded-full text-sm font-medium hover:bg-brand-dark transition-colors shadow-lg shadow-brand/20">
+                    <i data-lucide="chevrons-down" class="w-4 h-4"></i> Show More
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- ============ GLOBAL: Shape→Shape Retrieval ============ -->
+    <section id="global-3d3d" class="py-12 md:py-16 bg-section-alt">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 reveal">
+            <div class="text-center mb-6">
+                <h2 class="font-display font-bold text-2xl sm:text-3xl md:text-4xl text-navy mb-3">
+                    Shape-to-Shape Retrieval: <span class="gradient-text">3D → 3D</span>
+                </h2>
+                <div class="section-divider mb-4"></div>
+                <p class="text-slate-500 max-w-2xl mx-auto text-sm sm:text-base">
+                    Using only the 3D global descriptor without any 2D input, retrieved shapes share fine-grained
+                    geometric and topological structure beyond basic category labels. Drag to rotate.
+                </p>
+            </div>
+            <div class="table-wrapper bg-white rounded-2xl shadow-sm border border-slate-200/80 p-2">
+                <table class="exp-table" id="global-3d3d-table">
+                    <thead>
+                        <tr>
+                            <th>Query 3D</th>
+                            <th>Top-1</th>
+                            <th>Top-2</th>
+                            <th>Top-3</th>
+                            <th>Top-4</th>
+                            <th style="border-left: 2px solid #e2e8f0;">Last-2</th>
+                            <th>Last-1</th>
+                        </tr>
+                    </thead>
+                    <tbody id="global-3d3d-body"></tbody>
+                </table>
+            </div>
+            <div class="text-center mt-6">
+                <button id="toggle-global-3d3d"
+                    class="inline-flex items-center gap-2 px-6 py-2.5 bg-brand text-white rounded-full text-sm font-medium hover:bg-brand-dark transition-colors shadow-lg shadow-brand/20">
+                    <i data-lucide="chevrons-down" class="w-4 h-4"></i> Show More
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- ============ IMAGE MODAL ============ -->
+    <div id="imageModal"
+        class="fixed inset-0 z-[9000] bg-black/80 backdrop-blur-sm items-center justify-center hidden cursor-pointer"
+        onclick="closeImageModal()">
+        <button class="absolute top-4 right-4 text-white/70 hover:text-white transition-colors p-2"
+            onclick="closeImageModal()">
+            <i data-lucide="x" class="w-6 h-6"></i>
+        </button>
+        <img id="modalImg" src="" class="max-w-[90vw] max-h-[90vh] rounded-2xl shadow-2xl"
+            onclick="event.stopPropagation()" />
+    </div>
+
+    <!-- ============ BACK TO TOP ============ -->
+    <button id="backToTop"
+        class="fixed bottom-6 right-6 z-40 w-11 h-11 bg-brand text-white rounded-full shadow-lg shadow-brand/30 flex items-center justify-center hover:bg-brand-dark transition-all opacity-0 translate-y-4 pointer-events-none">
+        <i data-lucide="arrow-up" class="w-5 h-5"></i>
+    </button>
+
+    <!-- ============ FOOTER ============ -->
+    <footer class="py-8 bg-slate-50 border-t border-slate-200/60">
+        <div class="max-w-4xl mx-auto px-4 text-center">
+            <p class="text-slate-400 text-sm">
+                Website template inspired by <a href="https://nerfies.github.io"
+                    class="text-brand hover:text-brand-dark transition-colors">Nerfies</a>.
+            </p>
+        </div>
+    </footer>
+
+    <!-- ============ SCRIPTS ============ -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        // Initialize Lucide icons
+        lucide.createIcons();
+
+        // ===================== PAGE LOADER =====================
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                document.getElementById('pageLoader').classList.add('hidden');
+                setTimeout(() => document.getElementById('pageLoader').remove(), 400);
+            }, 300);
+        });
+
+        // ===================== NAVIGATION =====================
+        const mainNav = document.getElementById('mainNav');
+        const mobileMenu = document.getElementById('mobileMenu');
+        const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+        const backToTopBtn = document.getElementById('backToTop');
+        const navLinks = document.querySelectorAll('.nav-link');
+        const mobileNavLinks = document.querySelectorAll('.mobile-nav-link');
+        const sections = document.querySelectorAll('section[id]');
+
+        // Show/hide nav on scroll
+        let lastScroll = 0;
+        window.addEventListener('scroll', () => {
+            const y = window.scrollY;
+            // Show nav after hero section
+            if (y > 200) {
+                mainNav.classList.remove('hidden');
+            } else {
+                mainNav.classList.add('hidden');
+            }
+            // Back to top button
+            if (y > 600) {
+                backToTopBtn.classList.remove('opacity-0', 'translate-y-4', 'pointer-events-none');
+                backToTopBtn.classList.add('opacity-100', 'translate-y-0');
+            } else {
+                backToTopBtn.classList.add('opacity-0', 'translate-y-4', 'pointer-events-none');
+                backToTopBtn.classList.remove('opacity-100', 'translate-y-0');
+            }
+            // Active section tracking
+            let current = '';
+            sections.forEach(sec => {
+                const top = sec.offsetTop - 80;
+                if (y >= top) current = sec.getAttribute('id');
+            });
+            navLinks.forEach(link => {
+                link.classList.remove('active');
+                if (link.getAttribute('href') === '#' + current) link.classList.add('active');
+            });
+            lastScroll = y;
+        });
+
+        backToTopBtn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+
+        // Mobile menu toggle
+        mobileMenuBtn.addEventListener('click', () => {
+            mobileMenu.classList.toggle('open');
+        });
+        mobileNavLinks.forEach(link => {
+            link.addEventListener('click', () => mobileMenu.classList.remove('open'));
+        });
+
+        // ===================== SCROLL REVEAL =====================
+        const revealObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('visible');
+                }
+            });
+        }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+        document.querySelectorAll('.reveal').forEach(el => revealObserver.observe(el));
+
+        // ===================== IMAGE MODAL =====================
+        function showImageModal(src) {
+            const modal = document.getElementById('imageModal');
+            document.getElementById('modalImg').src = src;
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            document.body.style.overflow = 'hidden';
+        }
+        function closeImageModal() {
+            const modal = document.getElementById('imageModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            document.body.style.overflow = '';
+        }
+        document.addEventListener('keydown', e => { if (e.key === 'Escape') closeImageModal(); });
+
+        // ===================== MATERIAL OVERRIDE =====================
+        const MATERIAL_PARAMS = { r: 175, g: 178, b: 185, metallic: 0.0, roughness: 0.55, exposure: 1.4 };
+
+        function applyMaterialSettings(modelViewer, _retryAttempt) {
+            if (modelViewer.hasAttribute('data-no-material-override')) return;
+            const attempt = _retryAttempt || 0;
+            const MAX_RETRIES = 8;
+            if (modelViewer.model && modelViewer.model.materials && modelViewer.model.materials.length > 0) {
+                modelViewer.model.materials.forEach(material => {
+                    if (material.pbrMetallicRoughness) {
+                        let color = [MATERIAL_PARAMS.r, MATERIAL_PARAMS.g, MATERIAL_PARAMS.b, 255].map(x => x / 255);
+                        material.pbrMetallicRoughness.setBaseColorFactor(color);
+                        material.pbrMetallicRoughness.setMetallicFactor(MATERIAL_PARAMS.metallic);
+                        material.pbrMetallicRoughness.setRoughnessFactor(MATERIAL_PARAMS.roughness);
+                        try { material.pbrMetallicRoughness.baseColorTexture.setTexture(null); } catch (e) { }
+                        try { material.pbrMetallicRoughness.metallicRoughnessTexture.setTexture(null); } catch (e) { }
+                        try { if (material.normalTexture) material.normalTexture.setTexture(null); } catch (e) { }
+                        try { if (material.emissiveTexture) material.emissiveTexture.setTexture(null); } catch (e) { }
+                        try { if (material.occlusionTexture) material.occlusionTexture.setTexture(null); } catch (e) { }
+                    }
+                });
+            } else if (attempt < MAX_RETRIES) {
+                const delay = Math.min(100 * Math.pow(1.5, attempt), 2000);
+                setTimeout(() => applyMaterialSettings(modelViewer, attempt + 1), delay);
+                return;
+            }
+            modelViewer.setAttribute('exposure', MATERIAL_PARAMS.exposure.toFixed(2));
+        }
+
+        // ===================== LAZY LOADING MODEL-VIEWERS =====================
+        // Instead of loading all models at once, we use data-src and only set src when visible
+        const lazyObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const mv = entry.target;
+                    if (mv.dataset.src && !mv.src) {
+                        mv.src = mv.dataset.src;
+                        delete mv.dataset.src;
+                    }
+                    lazyObserver.unobserve(mv);
+                }
+            });
+        }, { rootMargin: '200px 0px' });
+
+        function observeLazyModels(container) {
+            container.querySelectorAll('model-viewer[data-src]').forEach(mv => {
+                lazyObserver.observe(mv);
+            });
+        }
+
+        // ===================== HELPER: model-viewer HTML =====================
+        function buildMV(glbPath) {
+            // Uses data-src for lazy loading
+            return '<model-viewer data-src="' + glbPath + '" tone-mapping="commerce" exposure="1.4" shadow-intensity="1.5" shadow-softness="0.8" environment-image="neutral" bounds="tight" auto-rotate rotation-per-second="45deg" camera-controls interaction-prompt="none" touch-action="none"></model-viewer>';
+        }
+        function buildMVLocal(glbPath) {
+            return '<model-viewer data-src="' + glbPath + '" tone-mapping="commerce" exposure="1.2" shadow-intensity="1" shadow-softness="0.8" environment-image="neutral" bounds="tight" auto-rotate rotation-per-second="45deg" camera-controls interaction-prompt="none" touch-action="none" data-no-material-override="true"></model-viewer>';
+        }
+        function buildMVRegion(glbPath) {
+            return '<model-viewer data-src="' + glbPath + '" tone-mapping="commerce" exposure="1.5" shadow-intensity="0" environment-image="neutral" bounds="tight" auto-rotate rotation-per-second="30deg" camera-controls interaction-prompt="none" touch-action="none" data-no-material-override="true" data-region-model="true"></model-viewer>';
+        }
+
+        // ===================== GLOBAL 2D→3D =====================
+        const global2d3dCases = [
+            { name: 'dumbbell', label: 'Dumbbell', sim_top: [0.9820, 0.9247, 0.8949, 0.8832], sim_bot: [0.4024, 0.4148] },
+            { name: 'softball', label: 'Softball', sim_top: [0.9695, 0.9597, 0.9571, 0.9549], sim_bot: [0.4591, 0.4652] },
+            // { name: 'flashlight', label: 'Flashlight', sim_top: [0.9372, 0.9300, 0.8923, 0.8897], sim_bot: [0.4471, 0.4487] },
+            { name: 'wheelchair', label: 'Wheelchair', sim_top: [0.8862, 0.8847, 0.8846, 0.8845], sim_bot: [0.3959, 0.4091] },
+        ];
+
+        (function buildGlobal2d3d() {
+            const tbody = document.getElementById('global-2d3d-body');
+            const INITIAL_VISIBLE = 2;
+            global2d3dCases.forEach((c, idx) => {
+                const tr = document.createElement('tr');
+                if (idx >= INITIAL_VISIBLE) tr.className = 'collapsible-row collapsed g2d3d-collapsible';
+                const tdQ = document.createElement('td');
+                tdQ.innerHTML = '<img class="query-img-table img-zoom" src="./img/global_2d_3d/' + c.name + '_query.png" onclick="showImageModal(this.src)"><br><span class="sim-badge">' + c.label + '</span>';
+                tr.appendChild(tdQ);
+                for (let i = 1; i <= 4; i++) {
+                    const td = document.createElement('td');
+                    const ii = i < 10 ? '0' + i : '' + i;
+                    td.innerHTML = buildMV('./glb/global_2d_3d/' + c.name + '_top' + ii + '.glb') + '<br><span class="sim-badge">sim=' + c.sim_top[i - 1].toFixed(4) + '</span>';
+                    tr.appendChild(td);
+                }
+                const botFiles = ['bot02', 'bot01'];
+                const botSims = [c.sim_bot[1], c.sim_bot[0]];
+                for (let i = 0; i < 2; i++) {
+                    const td = document.createElement('td');
+                    if (i === 0) td.style.borderLeft = '2px solid #e2e8f0';
+                    td.innerHTML = buildMV('./glb/global_2d_3d/' + c.name + '_' + botFiles[i] + '.glb') + '<br><span class="sim-badge">sim=' + botSims[i].toFixed(4) + '</span>';
+                    tr.appendChild(td);
+                }
+                tbody.appendChild(tr);
+            });
+            observeLazyModels(tbody);
+        })();
+
+        document.getElementById('toggle-global-2d3d').addEventListener('click', function () {
+            const rows = document.querySelectorAll('.g2d3d-collapsible');
+            const isExpanded = this.textContent.trim().includes('Show Less');
+            rows.forEach(r => isExpanded ? r.classList.add('collapsed') : r.classList.remove('collapsed'));
+            this.innerHTML = isExpanded
+                ? '<i data-lucide="chevrons-down" class="w-4 h-4"></i> Show More'
+                : '<i data-lucide="chevrons-up" class="w-4 h-4"></i> Show Less';
+            lucide.createIcons();
+            if (!isExpanded) {
+                // Trigger lazy loading for newly visible models
+                setTimeout(() => observeLazyModels(document.getElementById('global-2d3d-body')), 100);
+            }
+        });
+
+        // ===================== GLOBAL 3D→3D =====================
+        const global3d3dCases = [
+            { name: 'bicycle', label: 'Bicycle', sim_top: [0.9933, 0.9929, 0.9923, 0.9907], sim_bot: [0.5498, 0.5534] },
+            { name: 'helicopter', label: 'Helicopter', sim_top: [0.9925, 0.9798, 0.9780, 0.9780], sim_bot: [0.5081, 0.5862] },
+            { name: 'mailbox', label: 'Mailbox', sim_top: [0.9913, 0.9908, 0.9893, 0.9791], sim_bot: [0.5439, 0.5608] },
+            { name: 'chandelier', label: 'Chandelier', sim_top: [0.9764, 0.9699, 0.9641, 0.9514], sim_bot: [0.5432, 0.5945] },
+            { name: 'armchair_1', label: 'Armchair (1)', sim_top: [0.9244, 0.9229, 0.9146, 0.9127], sim_bot: [0.5368, 0.5596] },
+            { name: 'armchair_2', label: 'Armchair (2)', sim_top: [0.9888, 0.7039, 0.6967, 0.6840], sim_bot: [0.4636, 0.4664] },
+            { name: 'backpack', label: 'Backpack', sim_top: [0.9094, 0.9069, 0.9034, 0.8970], sim_bot: [0.5369, 0.5928] },
+            { name: 'balloon', label: 'Hot-air Balloon', sim_top: [0.8936, 0.8771, 0.8734, 0.8643], sim_bot: [0.5151, 0.5457] },
+            { name: 'alarm_clock', label: 'Alarm Clock', sim_top: [0.8983, 0.8781, 0.8594, 0.8506], sim_bot: [0.5664, 0.5907] },
+        ];
+
+        (function buildGlobal3d3d() {
+            const tbody = document.getElementById('global-3d3d-body');
+            const INITIAL_VISIBLE = 2;
+            global3d3dCases.forEach((c, idx) => {
+                const tr = document.createElement('tr');
+                if (idx >= INITIAL_VISIBLE) tr.className = 'collapsible-row collapsed g3d3d-collapsible';
+                const tdQ = document.createElement('td');
+                tdQ.innerHTML = buildMV('./glb/global_3d_3d/' + c.name + '_query.glb') + '<br><span class="sim-badge">' + c.label + '</span>';
+                tr.appendChild(tdQ);
+                for (let i = 1; i <= 4; i++) {
+                    const td = document.createElement('td');
+                    const ii = i < 10 ? '0' + i : '' + i;
+                    td.innerHTML = buildMV('./glb/global_3d_3d/' + c.name + '_top' + ii + '.glb') + '<br><span class="sim-badge">sim=' + c.sim_top[i - 1].toFixed(4) + '</span>';
+                    tr.appendChild(td);
+                }
+                const botFiles = ['bot02', 'bot01'];
+                const botSims = [c.sim_bot[1], c.sim_bot[0]];
+                for (let i = 0; i < 2; i++) {
+                    const td = document.createElement('td');
+                    if (i === 0) td.style.borderLeft = '2px solid #e2e8f0';
+                    td.innerHTML = buildMV('./glb/global_3d_3d/' + c.name + '_' + botFiles[i] + '.glb') + '<br><span class="sim-badge">sim=' + botSims[i].toFixed(4) + '</span>';
+                    tr.appendChild(td);
+                }
+                tbody.appendChild(tr);
+            });
+            observeLazyModels(tbody);
+        })();
+
+        document.getElementById('toggle-global-3d3d').addEventListener('click', function () {
+            const rows = document.querySelectorAll('.g3d3d-collapsible');
+            const isExpanded = this.textContent.trim().includes('Show Less');
+            rows.forEach(r => isExpanded ? r.classList.add('collapsed') : r.classList.remove('collapsed'));
+            this.innerHTML = isExpanded
+                ? '<i data-lucide="chevrons-down" class="w-4 h-4"></i> Show More'
+                : '<i data-lucide="chevrons-up" class="w-4 h-4"></i> Show Less';
+            lucide.createIcons();
+            if (!isExpanded) {
+                setTimeout(() => observeLazyModels(document.getElementById('global-3d3d-body')), 100);
+            }
+        });
+
+        // ===================== LOCAL 1v1 (Paginated Carousel) =====================
+        const local1v1Cases = [1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30];
+        const LOCAL_1V1_PER_PAGE = 6;
+        let local1v1Page = 0;
+        const local1v1TotalPages = Math.ceil(local1v1Cases.length / LOCAL_1V1_PER_PAGE);
+
+        function renderLocal1v1Page(page) {
+            const grid = document.getElementById('local-1v1-grid');
+            grid.innerHTML = '';
+            const start = page * LOCAL_1V1_PER_PAGE;
+            const end = Math.min(start + LOCAL_1V1_PER_PAGE, local1v1Cases.length);
+            for (let idx = start; idx < end; idx++) {
+                const c = local1v1Cases[idx];
+                const card = document.createElement('div');
+                card.className = 'local-card';
+                card.innerHTML = '<img class="query-thumb img-zoom" src="./img/local_1v1/case_' + c + '_query.png" style="max-height:120px;max-width:100%;object-fit:contain;border-radius:8px;border:1px solid #e2e8f0;margin-bottom:8px;cursor:pointer;" onclick="showImageModal(this.src)">' +
+                    buildMV('./glb/local_1v1/case_' + c + '.glb');
+                grid.appendChild(card);
+            }
+            document.getElementById('local-1v1-page-info').textContent = (page + 1) + ' / ' + local1v1TotalPages;
+            document.getElementById('local-1v1-prev').disabled = (page === 0);
+            document.getElementById('local-1v1-next').disabled = (page === local1v1TotalPages - 1);
+            // Re-observe lazy models
+            observeLazyModels(grid);
+        }
+
+        document.getElementById('local-1v1-prev').addEventListener('click', function () {
+            if (local1v1Page > 0) { local1v1Page--; renderLocal1v1Page(local1v1Page); }
+        });
+        document.getElementById('local-1v1-next').addEventListener('click', function () {
+            if (local1v1Page < local1v1TotalPages - 1) { local1v1Page++; renderLocal1v1Page(local1v1Page); }
+        });
+        renderLocal1v1Page(0);
+
+        // ===================== LOCAL 1vN =====================
+        const local1vNCases = [
+            { id: 1, numTop: 5 },
+            { id: 2, numTop: 5 },
+            { id: 3, numTop: 5 },
+            { id: 4, numTop: 5 }
+        ];
+
+        (function buildLocal1vN() {
+            const container = document.getElementById('local-1vN-container');
+            local1vNCases.forEach(c => {
+                const section = document.createElement('div');
+                section.className = 'experiment-card';
+                let html = '<div class="flex items-center justify-center gap-3 flex-wrap">';
+                html += '<div class="text-center"><img class="img-zoom" src="./img/local_1vN/case_' + c.id + '_query.png" onclick="showImageModal(this.src)" style="max-height:130px;max-width:130px;border:1px solid #e2e8f0;border-radius:8px;cursor:pointer;"><br><span class="sim-badge">Query</span></div>';
+                html += '<div class="text-2xl text-brand font-bold">→</div>';
+                html += '<div class="multi-model-row">';
+                for (let i = 1; i <= c.numTop; i++) {
+                    html += '<div class="text-center">' + buildMVLocal('./glb/local_1vN/case_' + c.id + '_top' + i + '.glb') + '</div>';
+                }
+                html += '</div></div>';
+                section.innerHTML = html;
+                container.appendChild(section);
+            });
+            observeLazyModels(container);
+        })();
+
+        // ===================== LOCAL 3D→2D =====================
+        const local3d2dCases = [
+            { id: 1, numViews: 3 },
+            { id: 2, numViews: 3 },
+            { id: 3, numViews: 3 },
+            { id: 4, numViews: 5 }
+        ];
+
+        (function buildLocal3d2d() {
+            const container = document.getElementById('local-3d2d-container');
+            local3d2dCases.forEach(c => {
+                const section = document.createElement('div');
+                section.className = 'experiment-card-alt';
+                let html = '<div class="flex items-center justify-center gap-3 flex-wrap">';
+                html += '<div class="text-center">' + buildMVLocal('./glb/local_3d_2d/case_' + c.id + '_query.glb') + '<br><span class="sim-badge">Query 3D</span></div>';
+                html += '<div class="text-2xl text-brand font-bold">→</div>';
+                html += '<div class="view-images">';
+                for (let i = 1; i <= c.numViews; i++) {
+                    html += '<img class="img-zoom" src="./img/local_3d_2d/case_' + c.id + '_view' + i + '.png" onclick="showImageModal(this.src)">';
+                }
+                html += '</div></div>';
+                section.innerHTML = html;
+                container.appendChild(section);
+            });
+            observeLazyModels(container);
+        })();
+
+        // ===================== LOCAL 3D→3D =====================
+        const local3d3dCases = [
+            { id: 1, numTop: 4, startIdx: 2 },
+            { id: 2, numTop: 4, startIdx: 1 },
+            { id: 3, numTop: 4, startIdx: 1 }
+        ];
+
+        (function buildLocal3d3d() {
+            const container = document.getElementById('local-3d3d-container');
+            local3d3dCases.forEach(c => {
+                const section = document.createElement('div');
+                section.className = 'experiment-card';
+                let html = '<div class="flex items-center justify-center gap-3 flex-wrap">';
+                html += '<div class="text-center">' + buildMVLocal('./glb/local_3d_3d/case_' + c.id + '_query.glb') + '<br><span class="sim-badge">Query</span></div>';
+                html += '<div class="text-2xl text-brand font-bold">→</div>';
+                html += '<div class="multi-model-row">';
+                const start = c.startIdx || 1;
+                for (let i = start; i < start + c.numTop; i++) {
+                    html += '<div class="text-center">' + buildMVLocal('./glb/local_3d_3d/case_' + c.id + '_top' + i + '.glb') + '</div>';
+                }
+                html += '</div></div>';
+                section.innerHTML = html;
+                container.appendChild(section);
+            });
+            observeLazyModels(container);
+        })();
+
+        // ===================== REGION CORRESPONDENCE =====================
+        const regionCases = [
+            { id: 1, overlays: ['case_1_overlay1.png'], render: 'case_1_render.png' },
+            { id: 3, overlays: ['case_3_overlay1.png'], render: 'case_3_render.png' },
+            { id: 2, overlays: ['case_2_overlay1.png', 'case_2_overlay2.png'], render: 'case_2_render.png' },
+            { id: 4, overlays: ['case_4_overlay1.png', 'case_4_overlay2.png'], render: 'case_4_render.png' },
+            { id: 5, overlays: ['case_5_overlay1.png', 'case_5_overlay2.png'], render: 'case_5_render.png' }
+        ];
+
+        (function buildRegion() {
+            const grid = document.getElementById('region-grid');
+            regionCases.forEach(c => {
+                const card = document.createElement('div');
+                card.className = 'region-card';
+                let html = '';
+                c.overlays.forEach((overlay, idx) => {
+                    if (idx > 0) html += '';
+                    html += '<img src="./img/region/' + overlay + '" onclick="showImageModal(this.src)" loading="lazy" title="2D Query (marked region)" class="img-zoom">';
+                });
+                html += '<span class="text-xl text-brand font-bold flex-shrink-0">→</span>' +
+                    '<img src="./img/region/' + c.render + '" onclick="showImageModal(this.src)" loading="lazy" title="3D Point Cloud (highlighted)" class="img-zoom">' +
+                    '<span class="text-xl text-brand font-bold flex-shrink-0">↔</span>' +
+                    buildMVRegion('./glb/region/case_' + c.id + '.glb');
+                card.innerHTML = html;
+                grid.appendChild(card);
+            });
+            observeLazyModels(grid);
+        })();
+
+        // ===================== INIT MATERIAL OVERRIDE FOR ALL MODEL-VIEWERS =====================
+        function setDoubleSided(modelViewer) {
+            if (modelViewer.model && modelViewer.model.materials) {
+                modelViewer.model.materials.forEach(mat => { mat.setDoubleSided(true); });
+            }
+        }
+
+        function initMaterialOverride() {
+            const observer = new MutationObserver((mutations) => {
+                mutations.forEach(m => {
+                    m.addedNodes.forEach(node => {
+                        if (node.querySelectorAll) {
+                            node.querySelectorAll('model-viewer').forEach(mv => {
+                                mv.addEventListener('load', () => {
+                                    applyMaterialSettings(mv);
+                                    if (mv.hasAttribute('data-region-model')) setDoubleSided(mv);
+                                });
+                            });
+                        }
+                    });
+                });
+            });
+            observer.observe(document.body, { childList: true, subtree: true });
+            document.querySelectorAll('model-viewer').forEach(mv => {
+                mv.addEventListener('load', () => {
+                    applyMaterialSettings(mv);
+                    if (mv.hasAttribute('data-region-model')) setDoubleSided(mv);
+                });
+            });
+        }
+        initMaterialOverride();
+    </script>
+</body>
+
+</html>
